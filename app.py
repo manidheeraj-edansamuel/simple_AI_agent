@@ -1,9 +1,9 @@
 import streamlit as st
-from transformers import pipeline
+from openai import OpenAI
 
-# -----------------------------------
+# ---------------------------------
 # Page Configuration
-# -----------------------------------
+# ---------------------------------
 st.set_page_config(
     page_title="Simple AI Agent",
     page_icon="🤖",
@@ -13,66 +13,78 @@ st.set_page_config(
 st.title("🤖 Simple AI Agent")
 st.caption("Workflow: User → LLM (Reasoning) → Response")
 
-# -----------------------------------
-# Load Model
-# -----------------------------------
-@st.cache_resource
-def load_llm():
-    generator = pipeline(
-        "text-generation",
-        model="distilgpt2"
-    )
-    return generator
+# ---------------------------------
+# Session State
+# ---------------------------------
+if "answer" not in st.session_state:
+    st.session_state.answer = ""
 
-llm = load_llm()
+# ---------------------------------
+# Sidebar
+# ---------------------------------
+st.sidebar.header("Settings")
 
-# -----------------------------------
+api_key = st.sidebar.text_input(
+    "OpenAI API Key",
+    type="password"
+)
+
+model = st.sidebar.selectbox(
+    "Model",
+    [
+        "gpt-4.1-mini",
+        "gpt-4.1",
+        "gpt-5-mini"
+    ]
+)
+
+# ---------------------------------
 # User Input
-# -----------------------------------
+# ---------------------------------
 user_query = st.text_area(
-    "Ask anything",
+    "Ask your question",
     placeholder="Example: Explain Artificial Intelligence"
 )
 
-# -----------------------------------
+# ---------------------------------
 # Generate Response
-# -----------------------------------
+# ---------------------------------
 if st.button("Generate Response"):
+
+    if api_key == "":
+        st.error("Please enter your OpenAI API Key.")
+        st.stop()
 
     if user_query.strip() == "":
         st.warning("Please enter a question.")
         st.stop()
 
+    client = OpenAI(api_key=api_key)
+
     with st.spinner("Thinking..."):
 
-        prompt = f"""
-You are a helpful AI Assistant.
-
-User:
-{user_query}
-
-Think carefully before answering.
-
-Answer:
-"""
-
-        output = llm(
-            prompt,
-            max_new_tokens=120,
-            temperature=0.7,
-            do_sample=True
+        result = client.responses.create(
+            model=model,
+            input=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful AI assistant."
+                },
+                {
+                    "role": "user",
+                    "content": user_query
+                }
+            ]
         )
 
-        response = output[0]["generated_text"]
+        st.session_state.answer = result.output_text
 
-        if "Answer:" in response:
-            response = response.split("Answer:")[-1].strip()
+# ---------------------------------
+# Display Workflow
+# ---------------------------------
+if st.session_state.answer:
 
-    # -----------------------------------
-    # Display Workflow
-    # -----------------------------------
-
-    st.success("Response Generated!")
+    st.divider()
 
     col1, col2, col3 = st.columns(3)
 
@@ -81,30 +93,29 @@ Answer:
         st.info(user_query)
 
     with col2:
-        st.subheader("🧠 LLM Reasoning")
-        st.write("Analyzing the prompt...")
-        st.progress(100)
+        st.subheader("🧠 LLM")
+        st.success("Reasoning Completed")
 
     with col3:
         st.subheader("🤖 Response")
-        st.success(response)
+        st.success("Answer Generated")
 
     st.divider()
 
     st.subheader("Workflow")
 
-    st.markdown("""
-```text
-User
+    st.code(
+"""User
    │
    ▼
 LLM (Reasoning)
    │
    ▼
-Response
-""")
-st.divider()
+Response"""
+    )
 
-st.subheader("Final Answer")
+    st.divider()
 
-st.write(response)
+    st.subheader("Final Answer")
+
+    st.write(st.session_state.answer)
