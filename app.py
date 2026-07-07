@@ -1,9 +1,10 @@
 import streamlit as st
 from openai import OpenAI
 
-# ---------------------------------
-# Page Configuration
-# ---------------------------------
+# ----------------------------------
+# Page Config
+# ----------------------------------
+
 st.set_page_config(
     page_title="Simple AI Agent",
     page_icon="🤖",
@@ -11,111 +12,93 @@ st.set_page_config(
 )
 
 st.title("🤖 Simple AI Agent")
-st.caption("Workflow: User → LLM (Reasoning) → Response")
+st.caption("Workflow: User → NVIDIA LLM → Response")
 
-# ---------------------------------
-# Session State
-# ---------------------------------
-if "answer" not in st.session_state:
-    st.session_state.answer = ""
+# ----------------------------------
+# NVIDIA Client
+# ----------------------------------
 
-# ---------------------------------
-# Sidebar
-# ---------------------------------
-st.sidebar.header("Settings")
-
-api_key = st.sidebar.text_input(
-    "OpenAI API Key",
-    type="password"
+client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key=st.secrets["NVIDIA_API_KEY"]
 )
 
-model = st.sidebar.selectbox(
-    "Model",
-    [
-        "gpt-4.1-mini",
-        "gpt-4.1",
-        "gpt-5-mini"
-    ]
-)
-
-# ---------------------------------
+# ----------------------------------
 # User Input
-# ---------------------------------
-user_query = st.text_area(
-    "Ask your question",
-    placeholder="Example: Explain Artificial Intelligence"
+# ----------------------------------
+
+question = st.text_area(
+    "Ask anything",
+    placeholder="Explain Artificial Intelligence"
 )
 
-# ---------------------------------
-# Generate Response
-# ---------------------------------
+# ----------------------------------
+# Button
+# ----------------------------------
+
 if st.button("Generate Response"):
 
-    if api_key == "":
-        st.error("Please enter your OpenAI API Key.")
-        st.stop()
-
-    if user_query.strip() == "":
+    if question.strip() == "":
         st.warning("Please enter a question.")
         st.stop()
 
-    client = OpenAI(api_key=api_key)
-
     with st.spinner("Thinking..."):
 
-        result = client.responses.create(
-            model=model,
-            input=[
+        completion = client.chat.completions.create(
+
+            model="meta/llama-3.1-8b-instruct",
+
+            messages=[
                 {
-                    "role": "system",
-                    "content": "You are a helpful AI assistant."
+                    "role":"system",
+                    "content":"You are a helpful AI assistant."
                 },
                 {
-                    "role": "user",
-                    "content": user_query
+                    "role":"user",
+                    "content":question
                 }
-            ]
+            ],
+
+            temperature=0.5,
+            max_tokens=512
+
         )
 
-        st.session_state.answer = result.output_text
+        answer = completion.choices[0].message.content
 
-# ---------------------------------
-# Display Workflow
-# ---------------------------------
-if st.session_state.answer:
+    st.success("Response Generated!")
 
-    st.divider()
+    c1, c2, c3 = st.columns(3)
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
+    with c1:
         st.subheader("👤 User")
-        st.info(user_query)
+        st.info(question)
 
-    with col2:
+    with c2:
         st.subheader("🧠 LLM")
-        st.success("Reasoning Completed")
+        st.write("Reasoning...")
+        st.progress(100)
 
-    with col3:
+    with c3:
         st.subheader("🤖 Response")
-        st.success("Answer Generated")
+        st.success(answer)
 
     st.divider()
 
     st.subheader("Workflow")
 
-    st.code(
-"""User
-   │
-   ▼
-LLM (Reasoning)
-   │
-   ▼
-Response"""
-    )
+    st.code("""
+User
+  │
+  ▼
+NVIDIA LLM
+  │
+  ▼
+Response
+""")
 
     st.divider()
 
-    st.subheader("Final Answer")
+    st.subheader("Final Response")
 
-    st.write(st.session_state.answer)
+    st.write(answer)
